@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="description"content="Web site created using create-react-app"/>
+    <script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
+    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v6.1.1/dist/aframe-extras.min.js"></script>
+    <link rel="stylesheet" href="styles.css" />
+    <title>React App</title>
+  </head>
+  <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="holder" class="holder">
+        <div class="guide">
+            <div class="robot"><img src="https://raw.githubusercontent.com/arexamples/ar/master/guide.svg" /></div>
+            <div>
+                <p class="mystery-guide">Tajemný průvodce</p>
+                <div id="guide-text" class="guide-bubble">Naskenujte prosím symbol kompasu.</div>
+                <!-- <div id="guide-text" class="guide-bubble">Ve kterém roce se poprvě začal používat mobilní telefon pro osobní použití?</div>  -->
+            </div>
+        </div>
+         
+        <div id="answerButton" class="btn-group">
+            <button onclick="onButtonClick('.btn1', '.btn2', '.btn3')" class="button btn1">1990</button>
+            <button onclick="onButtonClick('.btn2', '.btn1', '.btn3')" class="button btn2">1997</button>
+            <button onclick="onButtonClick('.btn3', '.btn1', '.btn2')" class="button btn3">2003</button>
+        </div><!--
+        <div id="mapButton" class="map-button">
+            <button onclick="rightAnswer()" class="button">Mapa<img src="map-icon.svg"></button>
+        </div> -->
+    </div>
+
+    <div id="overlay" class="overlay">
+        <div class="overlay-container">
+            <img class="overlay-image" src="https://raw.githubusercontent.com/arexamples/ar/master/overlay.gif" />
+        </div>
+    </div>
+    
+    <div id="myEmbeddedScene">
+        <a-scene class="holder2" embedded device-orientation-permission-ui="enabled: false" [renderer]="logarithmicDepthBuffer: true; antialias: true;" arjs=’sourceType: webcam; trackingMethod:best; debugUIEnabled: true;’ vr-mode-ui='enabled: false'>
+        <a-assets>
+            <a-asset-item id="usb" src="https://raw.githubusercontent.com/arexamples/ar/master/models/usb_anim.glb"></a-asset-item>
+            <a-asset-item id="arrow" src="https://raw.githubusercontent.com/arexamples/ar/master/models/arrow.glb"></a-asset-item> 
+        </a-assets>
+        <a-marker id="arrow_marker" type='pattern' url='https://raw.githubusercontent.com/arexamples/ar/master/markers/arrow_marker.patt' smooth="true" smoothCount="10" smoothTolerance="0.01" smoothThreshold="5" registerevents>
+            <a-entity id="wrapper" position="0 0 0" emitevents="true">     
+            <a-entity id="animatedModel" gltf-model="#usb" scale="1 1 1" rotation="-90 0 0" position="0 0 0"></a-entity>       
+            </a-entity>                                                                                   
+        </a-marker>			   
+        <a-entity camera></a-entity>
+        </a-scene>
+    </div>
+    <div id="ARKO"></div>
+    								   
+<script> 
+let vh = window.innerHeight * 0.01;
+document.documentElement.style.setProperty('--vh', `${vh}px`);
+
+function onButtonClick(element, remove1, remove2) {
+    document.querySelector(element).classList.add("focused");
+    document.querySelector(remove1).classList.remove("focused");
+    document.querySelector(remove2).classList.remove("focused");
+}
+
+var wrapper;
+var imageWrapper;  
+var animatedModel;
+var guideText;
+var overlay;
+var currentPhaze = "question"
+var answerButtonsDiv;
+var arrowButtonsDiv;
+var mapButtonsDiv;
+var modelButtonsDiv;
+var holderDiv;
+  
+window.onload = () => {
+    wrapper = document.getElementById('wrapper');
+    imageWrapper = document.getElementById("imageWrapper");
+    animatedModel = document.getElementById("animatedModel");
+    guideText = document.getElementById("guide-text");
+    overlay = document.getElementById("overlay");
+    holderDiv = document.getElementById("holder");
+};   
+
+AFRAME.registerComponent('registerevents', {
+    init: function () {
+        var marker = this.el;
+
+        marker.addEventListener('markerFound', function() {
+            var markerId = marker.id;
+            overlay.style.visibility = "hidden";
+            if(currentPhaze == "question")
+            {
+                showAnswerButtons()
+                guideText.innerHTML = 'Ve kterém roce se poprvě začal používat mobilní telefon pro osobní použití?'; 
+            }
+            if(currentPhaze == "model")
+            {
+                showModelButtons()
+                guideText.innerHTML = 'Správně! Telefon Xxx Yyy od společnosti ABC se začal používat v USA v listopadu 1989.'; 
+            }
+            if(currentPhaze == "arrow")
+            {
+                showArrowButtons()
+                guideText.innerHTML = 'Následujte šipku k další otázce.'; 
+            }
+            console.log('markerFound', markerId);
+            // TODO: Add your own code here to react to the marker being found.
+        });
+
+        marker.addEventListener('markerLost', function() {
+            var markerId = marker.id;
+            overlay.style.visibility = "visible";
+            guideText.innerHTML = 'Naskenujte prosím symbol kompasu.'; 
+            if(currentPhaze == "question" && answerButtonsDiv)
+            {
+                answerButtonsDiv.remove();
+            }
+            if(currentPhaze == "model" && modelButtonsDiv)
+            {
+                modelButtonsDiv.remove();
+              //answerButton.style.visibility = "hidden";
+            }
+            if(currentPhaze == "arrow" && arrowButtonsDiv)
+            {
+                arrowButtonsDiv.remove();
+            }
+            console.log('markerLost', markerId);
+            // TODO: Add your own code here to react to the marker being lost.
+        });
+    }
+});
+  
+function wrongAnswer(){
+    guideText.innerHTML = 'Špatně! Zkuste to znovu.'; 
+}
+
+function rightAnswer(){
+    answerButtonsDiv.remove();
+    animatedModel.setAttribute('animation-mixer',{clip: "*",loop: "once"});    
+    currentPhaze = "model";
+    showModelButtons();
+}
+
+
+function showAnswerButtons(){
+    answerButtonsDiv = document.createElement("div");
+    answerButtonsDiv.classList.add("btn-group");
+
+    var button1 = document.createElement("button");
+    button1.innerHTML = "1990";
+    button1.classList.add("button");
+    button1.onclick = function() {rightAnswer()};
+    answerButtonsDiv.appendChild(button1);
+
+    var button2 = document.createElement("button");
+    button2.innerHTML = "1997";
+    button2.classList.add('button');
+    button2.onclick = function() {wrongAnswer()};
+    answerButtonsDiv.appendChild(button2);
+
+    var button3 = document.createElement("button");
+    button3.innerHTML = "2003";
+    button3.classList.add('button');
+    button3.onclick = function() {wrongAnswer()};
+    answerButtonsDiv.appendChild(button3);
+    //document.getElementById("MyElement").classList.remove('MyClass');
+
+    holderDiv.appendChild(answerButtonsDiv);
+}
+
+function showModelButtons(){
+    currentPhaze = "model";
+    if(arrowButtonsDiv)
+    {
+        arrowButtonsDiv.remove();
+    }
+    guideText.innerHTML = 'Správně! Telefon Xxx Yyy od společnosti ABC se začal používat v USA v listopadu 1989.'; 
+
+    modelButtonsDiv = document.createElement("div");
+    modelButtonsDiv.classList.add("map-button");
+
+    var button1 = document.createElement("button");
+    button1.innerHTML = "Šipka";
+    button1.classList.add("button");
+    button1.onclick = function() {showArrow()};
+    modelButtonsDiv.appendChild(button1);
+
+
+    holderDiv.appendChild(modelButtonsDiv);
+}
+
+function showArrowButtons(){
+    currentPhaze = "arrow";
+    if(modelButtonsDiv)
+    {
+        modelButtonsDiv.remove();
+    }
+    guideText.innerHTML = 'Následujte šipku k další otázce.';
+
+    arrowButtonsDiv = document.createElement("div");
+    arrowButtonsDiv.classList.add("map-button");
+
+
+    var a = document.createElement('a');
+    a.href = "https://arexamples.github.io/ar/map.html";
+    a.target = "_blank";                                                                                
+    a.ret = "noopener noreferrer";   
+    
+
+    var button1 = document.createElement("button");
+    button1.innerHTML = "Mapa<img src='map-icon.svg'>";
+    button1.classList.add("button");
+    a.appendChild(button1);
+
+    arrowButtonsDiv.appendChild(a);
+    holderDiv.appendChild(arrowButtonsDiv);
+}
+
+function showMapButtons(){
+    if(arrowButtonsDiv)
+    {
+        arrowButtonsDiv.remove();
+    }
+    mapButtonsDiv = document.createElement("div");
+    mapButtonsDiv.classList.add("map-button");
+
+    var button1 = document.createElement("button");
+    button1.innerHTML = "Mapa<img src='map-icon.svg'>";
+    button1.classList.add("button");
+    button1.onclick = function() {rightAnswer()};
+    mapButtonsDiv.appendChild(button1);
+
+    holderDiv.appendChild(mapButtonsDiv);
+}
+
+
+
+function showUsb(){
+    showModelButtons()
+    var usbEntity = document.createElement('a-entity');
+    usbEntity.setAttribute('gltf-model', "#usb");
+    usbEntity.setAttribute('rotation', {x: -90, y: 0, z: 0});
+    usbEntity.setAttribute('scale', {x: 1, y: 1, z: 1});
+    usbEntity.setAttribute('animation-mixer', "clips: *");                                           
+
+    //imageWrapper.innerHTML = '';                                             
+    wrapper.innerHTML = '';                                          
+    wrapper.appendChild(usbEntity);
+}
+  
+function showArrow(){
+    showArrowButtons()
+    var arrowEntity = document.createElement('a-entity');
+    arrowEntity.setAttribute('gltf-model', "#arrow");
+    arrowEntity.setAttribute('rotation', {x: 0, y: -135, z: 0});
+    arrowEntity.setAttribute('position', {x: 0.5, y: 0, z: -1});                                               
+    arrowEntity.setAttribute('scale', {x: 0.25, y: 0.25, z: 0.25});
+
+    //imageWrapper.innerHTML = '';                                               
+    wrapper.innerHTML = '';                                               
+    wrapper.appendChild(arrowEntity);
+}          
+                                                                                     
+function showMap(){                                                                      
+  var a = document.createElement('a');
+  a.href = "https://raw.githubusercontent.com/arexamples/ar/master/images/map.png";
+  a.target = "_blank";                                                                                
+  a.ret = "noopener noreferrer";                                                                                
+                                                                                  
+  var img = document.createElement("img");
+  img.src = "https://raw.githubusercontent.com/arexamples/ar/master/images/map.png";   
+  img.style = "text-align:center;max-width: 100%; height: auto; position: absolute; bottom: 0;left: 0; z-index: 10;"                                                                                         
+                                                                                                                             
+  wrapper.innerHTML = '';
+  imageWrapper.innerHTML = '';                                                                                                                    
+  a.appendChild(img);                                                                                                       
+  imageWrapper.appendChild(a);                                                    
+}    
+                                                                                                                    
+function showMap2(){                                                                      
+  var a = document.createElement('a');
+  a.href = "https://raw.githubusercontent.com/arexamples/ar/master/images/map2.png";
+  a.target = "_blank";                                                                                
+  a.ret = "noopener noreferrer";                                                                                
+                                                                                  
+  var img = document.createElement("img");
+  img.src = "https://raw.githubusercontent.com/arexamples/ar/master/images/map2.png";   
+  img.style = "text-align:center;max-width: 100%; height: auto; position: absolute; bottom: 0;left: 0; z-index: 10;"                                                                                         
+     
+                                                                                                                    
+  wrapper.innerHTML = '';
+  imageWrapper.innerHTML = '';                                                                                                                    
+  a.appendChild(img);                                                                                                       
+  imageWrapper.appendChild(a);                                                    
+}                  
+</script>
+  </body>
+</html>
